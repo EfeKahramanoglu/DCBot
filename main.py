@@ -1,11 +1,11 @@
 import asyncio
 import discord
-import config
+import os
 import random
 from discord.ext import commands
 import requests
 
-token = config.TOKEN
+token = os.environ["TOKEN"]
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
@@ -14,7 +14,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"{bot.user.name} aktif!")
+    print(f"{bot.user} aktif!")
 
 # ================= HOŞGELDİN =================
 
@@ -76,8 +76,11 @@ async def mute(ctx, member: discord.Member, süre: int):
         await ctx.send(f"{member.mention} {süre} saniyeliğine susturuldu 🔇")
 
         await asyncio.sleep(süre)
-        await member.remove_roles(muted_role)
-        await ctx.send(f"{member.mention} artık konuşabilir 🔊")
+
+        if muted_role in member.roles:
+            await member.remove_roles(muted_role)
+            await ctx.send(f"{member.mention} artık konuşabilir 🔊")
+
     except:
         await ctx.send("Mute işlemi yapılamadı ❌")
 
@@ -91,15 +94,26 @@ async def jail(ctx, member: discord.Member):
 
         if not jail_role:
             jail_role = await ctx.guild.create_role(name="Jail")
+
             for channel in ctx.guild.channels:
-                await channel.set_permissions(jail_role, send_messages=False, view_channel=False)
+                await channel.set_permissions(
+                    jail_role,
+                    send_messages=False,
+                    view_channel=False,
+                    speak=False
+                )
 
             ceza = discord.utils.get(ctx.guild.channels, name="ceza-kanali")
             if ceza:
-                await ceza.set_permissions(jail_role, send_messages=True, view_channel=True)
+                await ceza.set_permissions(
+                    jail_role,
+                    send_messages=True,
+                    view_channel=True
+                )
 
         await member.add_roles(jail_role)
         await ctx.send(f"{member.mention} hapse atıldı 🔒")
+
     except:
         await ctx.send("Jail işlemi yapılamadı ❌")
 
@@ -108,8 +122,9 @@ async def jail(ctx, member: discord.Member):
 async def unjail(ctx, member: discord.Member):
     try:
         jail_role = discord.utils.get(ctx.guild.roles, name="Jail")
-        await member.remove_roles(jail_role)
-        await ctx.send(f"{member.mention} hapisten çıkarıldı 🔓")
+        if jail_role:
+            await member.remove_roles(jail_role)
+            await ctx.send(f"{member.mention} hapisten çıkarıldı 🔓")
     except:
         await ctx.send("Unjail yapılamadı ❌")
 
@@ -129,7 +144,7 @@ async def clear(ctx, amount: int):
 
 def get_duck():
     try:
-        res = requests.get("https://random-d.uk/api/random")
+        res = requests.get("https://random-d.uk/api/random", timeout=5)
         return res.json()['url']
     except:
         return None
@@ -160,12 +175,14 @@ async def on_message(message):
         if "bot" in message.content.lower():
             await message.channel.send("Buyrun? 👀")
 
-        jail_role = discord.utils.get(message.guild.roles, name="Jail")
-        if jail_role and jail_role in message.author.roles:
-            if message.channel.name == "ceza-kanali":
-                if message.content.lower() == "özürdilerim":
-                    await message.author.remove_roles(jail_role)
-                    await message.channel.send("Özgür bırakıldın 🔓")
+        if message.guild:  # DM hatası engeli
+            jail_role = discord.utils.get(message.guild.roles, name="Jail")
+
+            if jail_role and jail_role in message.author.roles:
+                if message.channel.name == "ceza-kanali":
+                    if message.content.lower() == "özürdilerim":
+                        await message.author.remove_roles(jail_role)
+                        await message.channel.send("Özgür bırakıldın 🔓")
 
     except:
         pass
